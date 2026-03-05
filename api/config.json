@@ -1,0 +1,16 @@
+{
+  "server": {
+    "domain": "",
+    "port": 8080
+  },
+  "scraper": {
+    "concurrency": 5,
+    "requestDelayMs": 2000,
+    "randomDelayMs": 1000,
+    "retryCount": 2,
+    "requestTimeoutSec": 30
+  },
+  "matcher": {
+    "threshold": 0.55
+  }
+}

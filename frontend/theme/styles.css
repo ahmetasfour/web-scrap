@@ -1,0 +1,19 @@
+/* Ant Design overrides */
+.ant-btn-primary {
+  background-color: #2563eb !important;
+}
+
+.ant-btn-primary:hover {
+  background-color: #1d4ed8 !important;
+}
+
+.ant-card {
+  border-radius: 16px !important;
+}
+
+.ant-table-thead > tr > th {
+  background-color: #f9fafb !important;
+  font-weight: 500 !important;
+  font-size: 12px !important;
+  color: #6b7280 !important;
+}

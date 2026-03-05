@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { AntdRegistry } from '@ant-design/nextjs-registry'
 import { BreadcrumbProvider } from '@/contexts/BreadCrumbContext'
-import { LanguageProvider } from '@/contexts/LanguageContext.tsx'
+import { LanguageProvider } from '@/contexts/LanguageContext'
 import './styles.css'
 
 export const metadata: Metadata = {

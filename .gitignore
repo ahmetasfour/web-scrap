@@ -30,3 +30,20 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# -----------------
+# React / Node
+# -----------------
+node_modules/
+build/
+dist/
+.next/
+.cache/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# frontend env files
+frontend/.env

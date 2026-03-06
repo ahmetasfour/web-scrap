@@ -39,8 +39,7 @@ export async function scrapeCompanies(
 
   let response: Response
   try {
-    // SSE isteğini Next.js proxy'sini atlayarak doğrudan backend'e gönder
-    response = await fetch('http://localhost:8080/api/scrape/stream', {
+    response = await fetch('/api/scrape/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ companies }),

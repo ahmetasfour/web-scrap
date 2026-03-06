@@ -42,7 +42,7 @@ export default function HomePage() {
     const sid = sessionIdRef.current
     if (!sid) return
     sessionIdRef.current = null
-    await fetch(`http://localhost:8080/api/scrape/stop/${sid}`, { method: 'POST' }).catch(() => {})
+    await fetch(`/api/scrape/stop/${sid}`, { method: 'POST' }).catch(() => {})
   }
 
   const runScrape = async (selected: Company[]) => {

@@ -13,26 +13,48 @@ type SortField = 'reName' | 'reOrt' | 'rePlz' | 'reStrasse'
 
 export default function CompanyTable({ companies, selectedIds, onSelectionChange }: CompanyTableProps) {
   const [search, setSearch] = useState('')
+  const [filterOrt, setFilterOrt] = useState('')
+  const [filterPlz, setFilterPlz] = useState('')
+  const [filterEmail, setFilterEmail] = useState<'all' | 'with' | 'without'>('all')
   const [sortField, setSortField] = useState<SortField>('reName')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const ortOptions = useMemo(
+    () => [...new Set(companies.map((c) => c.reOrt).filter(Boolean))].sort(),
+    [companies]
+  )
+  const plzOptions = useMemo(
+    () => [...new Set(companies.map((c) => c.rePlz).filter(Boolean))].sort(),
+    [companies]
+  )
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return companies
-      .filter((c) =>
-        c.reName.toLowerCase().includes(q) ||
-        c.reOrt.toLowerCase().includes(q) ||
-        c.rePlz.toLowerCase().includes(q) ||
-        c.reStrasse.toLowerCase().includes(q) ||
-        c.reName2.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q)
-      )
+      .filter((c) => {
+        if (q && !(
+          c.reName.toLowerCase().includes(q) ||
+          c.reOrt.toLowerCase().includes(q) ||
+          c.rePlz.toLowerCase().includes(q) ||
+          c.reStrasse.toLowerCase().includes(q) ||
+          c.reName2.toLowerCase().includes(q) ||
+          c.email.toLowerCase().includes(q)
+        )) return false
+        if (filterOrt && c.reOrt !== filterOrt) return false
+        if (filterPlz && c.rePlz !== filterPlz) return false
+        if (filterEmail === 'with' && !c.email) return false
+        if (filterEmail === 'without' && c.email) return false
+        return true
+      })
       .sort((a, b) => {
         const va = (a[sortField] ?? '').toString().toLowerCase()
         const vb = (b[sortField] ?? '').toString().toLowerCase()
         return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
       })
-  }, [companies, search, sortField, sortDir])
+  }, [companies, search, filterOrt, filterPlz, filterEmail, sortField, sortDir])
+
+  const hasActiveFilters = filterOrt || filterPlz || filterEmail !== 'all'
+  const clearFilters = () => { setFilterOrt(''); setFilterPlz(''); setFilterEmail('all') }
 
   const allFilteredSelected =
     filtered.length > 0 && filtered.every((c) => selectedIds.has(c.id))
@@ -73,7 +95,8 @@ export default function CompanyTable({ companies, selectedIds, onSelectionChange
 
   return (
     <div>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-gray-100">
+        {/* Search */}
         <div className="relative">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
             fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -82,34 +105,75 @@ export default function CompanyTable({ companies, selectedIds, onSelectionChange
           </svg>
           <input
             type="text"
-            placeholder="Firma adı, şehir veya sokak ara..."
+            placeholder="Firma, şehir, sokak ara..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg
-              focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 w-72"
+            className="pl-9 pr-4 py-2 text-xs border border-gray-200 rounded-lg
+              focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 w-56"
           />
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-gray-500">
+        {/* Şehir */}
+        <select
+          value={filterOrt}
+          onChange={(e) => setFilterOrt(e.target.value)}
+          className={`text-xs border rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 cursor-pointer ${
+            filterOrt ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600'
+          }`}
+        >
+          <option value="">Tüm Şehirler</option>
+          {ortOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+
+        {/* PLZ */}
+        <select
+          value={filterPlz}
+          onChange={(e) => setFilterPlz(e.target.value)}
+          className={`text-xs border rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 cursor-pointer ${
+            filterPlz ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600'
+          }`}
+        >
+          <option value="">Tüm PLZ</option>
+          {plzOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+
+        {/* E-posta */}
+        <select
+          value={filterEmail}
+          onChange={(e) => setFilterEmail(e.target.value as typeof filterEmail)}
+          className={`text-xs border rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 cursor-pointer ${
+            filterEmail !== 'all' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600'
+          }`}
+        >
+          <option value="all">Tüm E-postalar</option>
+          <option value="with">E-postası Olanlar</option>
+          <option value="without">E-postası Olmayanlar</option>
+        </select>
+
+        {/* Sağ taraf */}
+        <div className="ml-auto flex items-center gap-3 text-xs text-gray-500">
           {selectedIds.size > 0 && (
             <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-md font-medium">
               {selectedIds.size} seçili
             </span>
           )}
           <span>{filtered.length} şirket</span>
-          {search && (
-            <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600">
+          {(search || hasActiveFilters) && (
+            <button
+              onClick={() => { setSearch(''); clearFilters() }}
+              className="text-gray-400 hover:text-gray-600"
+            >
               Temizle ×
             </button>
           )}
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto border border-gray-200 rounded-b-xl">
+        <table className="w-full text-sm border-collapse [&_td]:border-r [&_td]:border-gray-200 [&_td:last-child]:border-r-0">
           <thead>
-            <tr className="bg-gray-50 text-gray-500 text-xs">
-              <th className="w-12 px-4 py-3">
+            <tr className="bg-gray-100 text-gray-700 text-xs border-b-2 border-gray-300">
+              <th className="w-12 px-4 py-3 border-r border-gray-200">
                 <input
                   type="checkbox"
                   checked={allFilteredSelected}
@@ -117,28 +181,28 @@ export default function CompanyTable({ companies, selectedIds, onSelectionChange
                   className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
                 />
               </th>
-              <th className="px-4 py-3 text-left font-medium text-gray-400">En Objekt</th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-500 border-r border-gray-200">En Objekt</th>
               {columns.map(({ field, label }) => (
                 <th key={field}
-                  className="px-4 py-3 text-left font-medium cursor-pointer select-none hover:text-gray-700"
+                  className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:bg-gray-200 border-r border-gray-200 transition-colors"
                   onClick={() => handleSort(field)}>
                   {label} <SortIcon field={field} />
                 </th>
               ))}
-              <th className="px-4 py-3 text-left font-medium">E-posta</th>
-              <th className="px-4 py-3 text-left font-medium">Telefon</th>
-              <th className="px-4 py-3 text-left font-medium">Link</th>
+              <th className="px-4 py-3 text-left font-semibold border-r border-gray-200">E-posta</th>
+              <th className="px-4 py-3 text-left font-semibold border-r border-gray-200">Telefon</th>
+              <th className="px-4 py-3 text-left font-semibold">Link</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-200">
             {filtered.map((company) => {
               const gsLink = `https://www.gelbeseiten.de/suche/${encodeURIComponent(company.reName.replace(/ /g, '-'))}/${encodeURIComponent(company.reOrt)}`
               return (
               <tr
                 key={company.id}
                 onClick={() => toggleOne(company.id)}
-                className={`cursor-pointer transition-colors hover:bg-gray-50 ${
-                  selectedIds.has(company.id) ? 'bg-blue-50/50' : ''
+                className={`cursor-pointer transition-colors hover:bg-blue-50/40 ${
+                  selectedIds.has(company.id) ? 'bg-blue-50' : ''
                 }`}
               >
                 <td className="px-4 py-3">
@@ -154,18 +218,10 @@ export default function CompanyTable({ companies, selectedIds, onSelectionChange
                   {company.enObjekt || company.id}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600
-                      flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                      {company.reName.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-800 text-xs">{company.reName}</p>
-                      {company.reName2 && (
-                        <p className="text-gray-400 text-xs">{company.reName2}</p>
-                      )}
-                    </div>
-                  </div>
+                  <p className="font-medium text-gray-800 text-xs">{company.reName}</p>
+                  {company.reName2 && (
+                    <p className="text-gray-400 text-xs">{company.reName2}</p>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-gray-600 text-xs">
                   {company.reOrt || <span className="text-gray-300">—</span>}

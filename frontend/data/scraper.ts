@@ -20,7 +20,9 @@ function normalizeResult(r: ScrapeResult): ScrapeResult {
  */
 export async function scrapeCompanies(
   companies: Company[],
-  onProgress: (results: ScrapeResult[]) => void
+  onProgress: (results: ScrapeResult[]) => void,
+  signal?: AbortSignal,
+  onSessionId?: (sessionId: string) => void
 ): Promise<ScrapeResult[]> {
   const accumulated: ScrapeResult[] = companies.map((c) => ({
     ...c,
@@ -42,8 +44,10 @@ export async function scrapeCompanies(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ companies }),
+      signal,
     })
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') return accumulated
     return accumulated.map((r) => ({ ...r, status: 'error' as const, error: 'Bağlantı hatası' }))
   }
 
@@ -72,6 +76,7 @@ export async function scrapeCompanies(
   let buffer = ''
 
   while (true) {
+    if (signal?.aborted) { reader.cancel(); break }
     const { done, value } = await reader.read()
     if (done) break
 
@@ -86,6 +91,10 @@ export async function scrapeCompanies(
 
       try {
         const parsed = JSON.parse(raw) as Record<string, unknown>
+        if (parsed.type === 'session') {
+          onSessionId?.(parsed.sessionId as string)
+          continue
+        }
         if (parsed.type === 'total') continue
 
         const result = parsed as unknown as ScrapeResult

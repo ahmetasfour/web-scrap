@@ -118,29 +118,23 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          {isScraping && (
-            <div className="flex items-center gap-2 text-xs text-blue-600">
-              <span className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              Tarama devam ediyor...
-            </div>
-          )}
-          <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
+          <div className="flex items-center gap-1">
             {([
-              { key: 'all',       label: `Tümü (${stats.total})` },
-              { key: 'done',      label: `Bulundu (${stats.done})` },
-              { key: 'not_found', label: `Bulunamadı (${stats.not_found})` },
-              { key: 'error',     label: `Hata (${stats.error})` },
-            ] as const).map(({ key, label }) => (
+              { value: 'all',       label: 'Tümü',         count: stats.total     },
+              { value: 'done',      label: '✓ Bulundu',    count: stats.done      },
+              { value: 'not_found', label: '— Bulunamadı', count: stats.not_found },
+              { value: 'error',     label: '✕ Hata',       count: stats.error     },
+            ] as const).map(({ value, label, count }) => (
               <button
-                key={key}
-                onClick={() => setFilterStatus(key)}
-                className={`px-3 py-1 text-xs rounded-md transition-all ${
-                  filterStatus === key
-                    ? 'bg-white text-gray-800 shadow-sm font-medium'
-                    : 'text-gray-500 hover:text-gray-700'
+                key={value}
+                onClick={() => setFilterStatus(value)}
+                className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-colors ${
+                  filterStatus === value
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-500 border-gray-200 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600'
                 }`}
               >
-                {label}
+                {label} <span className="opacity-70">({count})</span>
               </button>
             ))}
           </div>
@@ -163,32 +157,6 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
 
       {/* Progress bar */}
       <div className="px-4 py-2.5 border-b border-gray-50 bg-gray-50/50">
-        {/* Row 1: counts + speed/ETA */}
-        <div className="flex items-center justify-between text-xs mb-1.5">
-          <div className="flex items-center gap-3 text-gray-500">
-            <span className="font-semibold text-gray-700">{processed} / {stats.total}</span>
-            {stats.done > 0 && <span className="text-green-600">✓ {stats.done} bulundu</span>}
-            {stats.not_found > 0 && <span className="text-yellow-500">— {stats.not_found} bulunamadı</span>}
-            {stats.error > 0 && <span className="text-red-400">✕ {stats.error} hata</span>}
-          </div>
-          <div className="flex items-center gap-3 text-gray-400">
-            {isScraping && speed > 0 && (
-              <span>{speed.toFixed(1)} şirket/sn</span>
-            )}
-            {isScraping && eta !== null && (
-              <span>
-                ~{eta >= 60
-                  ? `${Math.floor(eta / 60)}d ${Math.round(eta % 60)}sn`
-                  : `${Math.round(eta)}sn`} kaldı
-              </span>
-            )}
-            <span className={`font-bold tabular-nums ${isScraping ? 'text-blue-600' : 'text-gray-600'}`}>
-              {pct}%
-            </span>
-          </div>
-        </div>
-
-        {/* Progress bar */}
         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-300 ease-out"
@@ -203,28 +171,24 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin border border-gray-200 rounded-b-xl">
+        <table className="w-full text-sm border-collapse [&_td]:border-r [&_td]:border-gray-200 [&_td:last-child]:border-r-0">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-gray-50 text-gray-500 text-xs border-b border-gray-100">
-              <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Durum</th>
-              <th className="px-4 py-3 text-left font-medium">Firma Adı</th>
-              <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Şehir</th>
-              <th className="px-4 py-3 text-left font-medium whitespace-nowrap">PLZ</th>
-              <th className="px-4 py-3 text-left font-medium">E-posta</th>
-              <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Telefon</th>
-              <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Kaynak</th>
-              <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Link</th>
+            <tr className="bg-gray-100 text-gray-700 text-xs border-b-2 border-gray-300">
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200">Durum</th>
+              <th className="px-4 py-3 text-left font-semibold border-r border-gray-200">Firma Adı</th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200">Şehir</th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200">PLZ</th>
+              <th className="px-4 py-3 text-left font-semibold border-r border-gray-200">E-posta</th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200">Telefon</th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200">Kaynak</th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Link</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-200">
             {filtered.map((r) => {
-              const rowBg =
-                r.status === 'done'      ? 'bg-green-50/20' :
-                r.status === 'not_found' ? 'bg-yellow-50/20' :
-                r.status === 'error'     ? 'bg-red-50/20' : ''
               return (
-                <tr key={r.id} className={`hover:bg-gray-50 transition-colors ${rowBg}`}>
+                <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     <StatusBadge status={r.status} />
                     {r.status === 'error' && r.error && (
@@ -232,16 +196,8 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-purple-600
-                        flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                        {r.reName.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-800 text-xs truncate max-w-[180px]">{r.reName}</p>
-                        {r.reName2 && <p className="text-gray-400 text-xs truncate max-w-[180px]">{r.reName2}</p>}
-                      </div>
-                    </div>
+                    <p className="font-medium text-gray-800 text-xs truncate max-w-[200px]">{r.reName}</p>
+                    {r.reName2 && <p className="text-gray-400 text-xs truncate max-w-[200px]">{r.reName2}</p>}
                   </td>
                   <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">
                     {r.reOrt || <span className="text-gray-300">—</span>}

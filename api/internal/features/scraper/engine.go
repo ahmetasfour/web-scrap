@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"context"
 	"net/http"
 	"regexp"
 	"strings"
@@ -88,7 +89,8 @@ func dedupeKey(c model.Company) string {
 // RunStream scrapes all companies concurrently and sends each result to resultCh
 // as soon as it completes, enabling real-time streaming to the client.
 // The channel is closed when all companies have been processed.
-func (e *Engine) RunStream(companies []model.Company, resultCh chan<- model.ScrapeResult) {
+// Cancelling ctx stops dispatching new work; in-flight goroutines finish naturally.
+func (e *Engine) RunStream(ctx context.Context, companies []model.Company, resultCh chan<- model.ScrapeResult) {
 	defer close(resultCh)
 
 	type group struct {
@@ -111,8 +113,13 @@ func (e *Engine) RunStream(companies []model.Company, resultCh chan<- model.Scra
 	var wg sync.WaitGroup
 
 	for _, key := range orderedKeys {
+		// Stop dispatching new work when context is cancelled.
+		select {
+		case <-ctx.Done():
+			goto done
+		case sem <- struct{}{}:
+		}
 		wg.Add(1)
-		sem <- struct{}{}
 		go func(g *group) {
 			defer wg.Done()
 			defer func() { <-sem }()
@@ -141,6 +148,7 @@ func (e *Engine) RunStream(companies []model.Company, resultCh chan<- model.Scra
 		}(groups[key])
 	}
 
+done:
 	wg.Wait()
 }
 

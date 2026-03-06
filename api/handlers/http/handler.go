@@ -2,6 +2,8 @@ package handler
 
 import (
 	"bufio"
+	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -20,11 +22,22 @@ type Handler struct {
 	engine    *scraper.Engine
 	historyMu sync.RWMutex
 	history   []model.ScrapeResult
+	sessionMu sync.Mutex
+	sessions  map[string]context.CancelFunc
 }
 
 // New returns a Handler wired to the given scraper engine.
 func New(engine *scraper.Engine) *Handler {
-	return &Handler{engine: engine}
+	return &Handler{
+		engine:   engine,
+		sessions: make(map[string]context.CancelFunc),
+	}
+}
+
+func newSessionID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%x", b)
 }
 
 // Scrape handles POST /api/scrape
@@ -71,8 +84,15 @@ func (h *Handler) ScrapeStream(c *fiber.Ctx) error {
 		zap.String("time", time.Now().Format(time.RFC3339)),
 	)
 
+	sessionID := newSessionID()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	h.sessionMu.Lock()
+	h.sessions[sessionID] = cancel
+	h.sessionMu.Unlock()
+
 	resultCh := make(chan model.ScrapeResult, 50)
-	go h.engine.RunStream(req.Companies, resultCh)
+	go h.engine.RunStream(ctx, req.Companies, resultCh)
 
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
@@ -80,6 +100,17 @@ func (h *Handler) ScrapeStream(c *fiber.Ctx) error {
 	c.Set("X-Accel-Buffering", "no")
 
 	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
+		defer func() {
+			cancel()
+			h.sessionMu.Lock()
+			delete(h.sessions, sessionID)
+			h.sessionMu.Unlock()
+		}()
+
+		// Send session ID so the client can call /stop/:sessionId.
+		fmt.Fprintf(w, "data: {\"type\":\"session\",\"sessionId\":\"%s\"}\n\n", sessionID)
+		w.Flush()
+
 		// Send total count so the client can initialise the progress bar.
 		fmt.Fprintf(w, "data: {\"type\":\"total\",\"total\":%d}\n\n", len(req.Companies))
 		w.Flush()
@@ -105,6 +136,24 @@ func (h *Handler) ScrapeStream(c *fiber.Ctx) error {
 	})
 
 	return nil
+}
+
+// StopScrape handles POST /api/scrape/stop/:sessionId
+// It cancels the context for the given session, stopping new work from being dispatched.
+func (h *Handler) StopScrape(c *fiber.Ctx) error {
+	sessionID := c.Params("sessionId")
+
+	h.sessionMu.Lock()
+	cancel, ok := h.sessions[sessionID]
+	h.sessionMu.Unlock()
+
+	if !ok {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "session not found"})
+	}
+
+	cancel()
+	logging.Logger.Info("scrape session stopped", zap.String("sessionId", sessionID))
+	return c.JSON(fiber.Map{"ok": true})
 }
 
 // History handles GET /api/scrape/history

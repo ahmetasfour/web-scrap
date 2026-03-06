@@ -7,6 +7,7 @@ func RegisterRoutes(app *fiber.App, h *Handler) {
 	api := app.Group("/api")
 	api.Post("/scrape", h.Scrape)
 	api.Post("/scrape/stream", h.ScrapeStream)
+	api.Post("/scrape/stop/:sessionId", h.StopScrape)
 	api.Get("/scrape/history", h.History)
 
 	app.Get("/health", func(c *fiber.Ctx) error {

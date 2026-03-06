@@ -19,7 +19,6 @@ bin/
 dist/
 
 # Go modules
-go.sum
 
 # Environment variables
 .env

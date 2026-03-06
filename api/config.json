@@ -1,7 +1,12 @@
 {
   "server": {
     "domain": "",
-    "port": 8080
+    "port": 8080,
+    "cors": {
+      "allowOrigins": "*",
+      "allowHeaders": "Origin, Content-Type, Accept, Authorization",
+      "allowMethods": "GET, POST, PUT, DELETE, OPTIONS"
+    }
   },
   "scraper": {
     "concurrency": 5,

@@ -11,6 +11,6 @@
     "requestTimeoutSec": 30
   },
   "matcher": {
-    "threshold": 0.55
+    "threshold": 0.72
   }
 }

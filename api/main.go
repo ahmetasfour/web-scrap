@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"strconv"
 
 	"github.com/ahmet4dev/gol-lib/logging"
 	gol_middlewares "github.com/ahmet4dev/gol-lib/middlewares"
@@ -20,10 +19,9 @@ func main() {
 		logging.Logger.Fatal("failed to load config", zap.Error(err))
 	}
 
-	if port := os.Getenv("PORT"); port != "" {
-		if p, err := strconv.ParseInt(port, 10, 64); err == nil {
-			cfg.Server.Port = p
-		}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "10000"
 	}
 
 	engine := scraper.New(scraper.Config{
@@ -32,6 +30,7 @@ func main() {
 		RandomDelay:    cfg.Scraper.RandomDelay(),
 		RetryCount:     cfg.Scraper.RetryCount,
 		RequestTimeout: cfg.Scraper.RequestTimeout(),
+		MatchThreshold: cfg.Matcher.Threshold,
 	})
 
 	app := fiber.New(cfg.Server.Config)
@@ -40,8 +39,9 @@ func main() {
 	h := handler.New(engine)
 	handler.RegisterRoutes(app, h)
 
-	logging.Logger.Info("server starting", zap.String("host", cfg.Server.GetHost()))
-	if err := app.Listen(cfg.Server.GetHost()); err != nil {
+	host := ":" + port
+	logging.Logger.Info("server starting", zap.String("host", host))
+	if err := app.Listen(host); err != nil {
 		logging.Logger.Fatal("server failed", zap.Error(err))
 	}
 }

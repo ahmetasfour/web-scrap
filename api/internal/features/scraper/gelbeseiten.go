@@ -25,8 +25,14 @@ func (s *GelbeSeitenScraper) Scrape(company model.Company, cfg Config) (*Contact
 	info := &ContactInfo{Source: s.Name()}
 	emailSet := map[string]bool{}
 	phoneSet := map[string]bool{}
+	detailURLs := map[string]bool{}
+	threshold := cfg.MatchThreshold
+	if threshold <= 0 {
+		threshold = 0.55
+	}
 
 	c := newCollector(cfg, "www.gelbeseiten.de", "gelbeseiten.de")
+	detailCollector := newCollector(cfg, "www.gelbeseiten.de", "gelbeseiten.de")
 
 	// 404 means company simply doesn't exist in gelbeseiten — treat as no results, not a retriable error.
 	var notFound bool
@@ -41,13 +47,13 @@ func (s *GelbeSeitenScraper) Scrape(company model.Company, cfg Config) (*Contact
 		if candidateName == "" {
 			return
 		}
-		if !matcher.IsGoodMatch(company.ReName, candidateName, 0.55) {
+		if !matcher.IsGoodMatch(company.ReName, candidateName, threshold) {
 			return
 		}
 
 		e.ForEach("a[href^='mailto:']", func(_ int, el *colly.HTMLElement) {
-			email := strings.ToLower(strings.TrimPrefix(el.Attr("href"), "mailto:"))
-			if strings.Contains(email, "@") {
+			email := cleanEmail(el.Attr("href"))
+			if email != "" {
 				emailSet[email] = true
 			}
 		})
@@ -68,6 +74,37 @@ func (s *GelbeSeitenScraper) Scrape(company model.Company, cfg Config) (*Contact
 		for _, p := range extractPhones(e.Text) {
 			phoneSet[p] = true
 		}
+
+		e.ForEach("a[href]", func(_ int, el *colly.HTMLElement) {
+			href := strings.TrimSpace(el.Attr("href"))
+			if href == "" || strings.HasPrefix(href, "mailto:") || strings.HasPrefix(href, "tel:") {
+				return
+			}
+			abs := e.Request.AbsoluteURL(href)
+			if abs == "" || strings.Contains(abs, "/suche/") {
+				return
+			}
+			detailURLs[abs] = true
+		})
+	})
+
+	detailCollector.OnHTML("body", func(e *colly.HTMLElement) {
+		e.ForEach("a[href^='mailto:']", func(_ int, el *colly.HTMLElement) {
+			if email := cleanEmail(el.Attr("href")); email != "" {
+				emailSet[email] = true
+			}
+		})
+		e.ForEach("a[href^='tel:']", func(_ int, el *colly.HTMLElement) {
+			if p := cleanPhone(strings.TrimPrefix(el.Attr("href"), "tel:")); p != "" {
+				phoneSet[p] = true
+			}
+		})
+		for _, em := range extractEmails(e.Text) {
+			emailSet[em] = true
+		}
+		for _, p := range extractPhones(e.Text) {
+			phoneSet[p] = true
+		}
 	})
 
 	if err := c.Visit(searchURL); err != nil {
@@ -75,6 +112,16 @@ func (s *GelbeSeitenScraper) Scrape(company model.Company, cfg Config) (*Contact
 			return info, nil
 		}
 		return nil, fmt.Errorf("gelbeseiten: %w", err)
+	}
+	if len(emailSet) == 0 {
+		visited := 0
+		for u := range detailURLs {
+			if visited >= 5 {
+				break
+			}
+			visited++
+			_ = detailCollector.Visit(u)
+		}
 	}
 
 	for e := range emailSet {

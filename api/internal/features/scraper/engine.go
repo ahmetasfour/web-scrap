@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"context"
+	"net/url"
 	"net/http"
 	"regexp"
 	"strings"
@@ -45,6 +46,7 @@ type Config struct {
 	RandomDelay    time.Duration
 	RetryCount     int
 	RequestTimeout time.Duration
+	MatchThreshold float64
 }
 
 // Engine manages parallel scraping with rate limiting and retries.
@@ -268,19 +270,26 @@ func (e *Engine) scrapeOne(company model.Company) model.ScrapeResult {
 		close(hitCh)
 	}()
 
-	if h, ok := <-hitCh; ok {
+	var best *hit
+	for h := range hitCh {
+		hCopy := h
+		if best == nil || isBetterHit(hCopy.emails, hCopy.phones, best.emails, best.phones) {
+			best = &hCopy
+		}
+	}
+	if best != nil {
 		logging.Logger.Info("found",
-			zap.String("source", h.source),
+			zap.String("source", best.source),
 			zap.String("company", company.ReName),
-			zap.Strings("emails", h.emails),
-			zap.Strings("phones", h.phones),
+			zap.Strings("emails", best.emails),
+			zap.Strings("phones", best.phones),
 		)
 		return model.ScrapeResult{
 			Company: company,
 			Status:  "done",
-			Emails:  h.emails,
-			Phones:  h.phones,
-			Source:  h.source,
+			Emails:  best.emails,
+			Phones:  best.phones,
+			Source:  best.source,
 		}
 	}
 
@@ -291,10 +300,25 @@ func (e *Engine) scrapeOne(company model.Company) model.ScrapeResult {
 	return model.ScrapeResult{Company: company, Status: "not_found"}
 }
 
+func isBetterHit(aEmails, aPhones, bEmails, bPhones []string) bool {
+	aHasEmail := len(aEmails) > 0
+	bHasEmail := len(bEmails) > 0
+	if aHasEmail != bHasEmail {
+		return aHasEmail
+	}
+	if len(aEmails) != len(bEmails) {
+		return len(aEmails) > len(bEmails)
+	}
+	if len(aPhones) != len(bPhones) {
+		return len(aPhones) > len(bPhones)
+	}
+	return false
+}
+
 // --- helpers shared across sources ---
 
 var emailRe = regexp.MustCompile(
-	`[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.(?:de|com|net|org|eu|at|ch|info|biz|hamburg|berlin|koeln|nrw)`,
+	`(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,24}`,
 )
 
 var phoneRe = regexp.MustCompile(`(?:(?:\+49|0049|0)\s*(?:\d[\s\-/.]?){7,13}\d)`)
@@ -302,10 +326,15 @@ var phoneRe = regexp.MustCompile(`(?:(?:\+49|0049|0)\s*(?:\d[\s\-/.]?){7,13}\d)`
 func extractEmails(text string) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, m := range emailRe.FindAllString(text, -1) {
-		m = strings.ToLower(m)
-		if strings.HasSuffix(m, ".png") || strings.HasSuffix(m, ".jpg") ||
-			strings.HasSuffix(m, ".gif") || strings.HasSuffix(m, ".svg") {
+	normalized := strings.NewReplacer(
+		"[at]", "@",
+		"(at)", "@",
+		"[dot]", ".",
+		"(dot)", ".",
+	).Replace(text)
+	for _, m := range emailRe.FindAllString(normalized, -1) {
+		m = cleanEmail(m)
+		if m == "" {
 			continue
 		}
 		if !seen[m] {
@@ -314,6 +343,28 @@ func extractEmails(text string) []string {
 		}
 	}
 	return out
+}
+
+func cleanEmail(s string) string {
+	s = strings.TrimSpace(strings.ToLower(s))
+	s = strings.TrimPrefix(s, "mailto:")
+	if i := strings.IndexByte(s, '?'); i >= 0 {
+		s = s[:i]
+	}
+	if decoded, err := url.QueryUnescape(s); err == nil {
+		s = decoded
+	}
+	s = strings.Trim(s, " <>\"'`.,;:()[]{}")
+
+	if strings.Count(s, "@") != 1 {
+		return ""
+	}
+	if strings.HasSuffix(s, ".png") || strings.HasSuffix(s, ".jpg") ||
+		strings.HasSuffix(s, ".jpeg") || strings.HasSuffix(s, ".gif") ||
+		strings.HasSuffix(s, ".svg") || strings.HasSuffix(s, ".webp") {
+		return ""
+	}
+	return s
 }
 
 func extractPhones(text string) []string {
@@ -343,12 +394,18 @@ func cleanPhone(s string) string {
 	}
 	result := strings.TrimSpace(b.String())
 	digits := 0
+	var onlyDigits strings.Builder
 	for _, r := range result {
 		if r >= '0' && r <= '9' {
 			digits++
+			onlyDigits.WriteRune(r)
 		}
 	}
-	if digits < 9 {
+	if digits < 9 || digits > 14 {
+		return ""
+	}
+	d := onlyDigits.String()
+	if strings.HasPrefix(d, "00") && !strings.HasPrefix(d, "0049") {
 		return ""
 	}
 	return result

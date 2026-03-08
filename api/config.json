@@ -13,7 +13,9 @@
     "requestDelayMs": 2000,
     "randomDelayMs": 1000,
     "retryCount": 2,
-    "requestTimeoutSec": 30
+    "requestTimeoutSec": 30,
+    "searchEngineURL": "https://searx.be",
+    "cacheFile": "scraper_cache.json"
   },
   "matcher": {
     "threshold": 0.72

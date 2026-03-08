@@ -55,7 +55,7 @@ func (h *Handler) Scrape(c *fiber.Ctx) error {
 		zap.String("time", time.Now().Format(time.RFC3339)),
 	)
 
-	results := h.engine.Run(req.Companies)
+	results := h.engine.Run(req.Companies, req.FilterMode)
 
 	h.historyMu.Lock()
 	h.history = append(h.history, results...)
@@ -92,7 +92,7 @@ func (h *Handler) ScrapeStream(c *fiber.Ctx) error {
 	h.sessionMu.Unlock()
 
 	resultCh := make(chan model.ScrapeResult, 50)
-	go h.engine.RunStream(ctx, req.Companies, resultCh)
+	go h.engine.RunStream(ctx, req.Companies, req.FilterMode, resultCh)
 
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")

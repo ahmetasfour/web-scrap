@@ -6,11 +6,11 @@ import { useState, useEffect, useRef, useMemo, memo } from 'react'
 
 const StatusBadge = ({ status }: { status: ScrapeResult['status'] }) => {
   const map = {
-    pending:   { label: 'Bekliyor',    cls: 'bg-gray-100 text-gray-500' },
-    scraping:  { label: 'İşleniyor…',  cls: 'bg-blue-100 text-blue-600 animate-pulse' },
-    done:      { label: 'Bulundu',     cls: 'bg-green-100 text-green-600' },
-    not_found: { label: 'Bulunamadı',  cls: 'bg-yellow-100 text-yellow-600' },
-    error:     { label: 'Hata',        cls: 'bg-red-100 text-red-600' },
+    pending:   { label: 'Bekliyor',    cls: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400' },
+    scraping:  { label: 'İşleniyor…',  cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 animate-pulse' },
+    done:      { label: 'Bulundu',     cls: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' },
+    not_found: { label: 'Bulunamadı',  cls: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400' },
+    error:     { label: 'Hata',        cls: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' },
   }
   const s = map[status] ?? map.pending
   return (
@@ -32,10 +32,9 @@ interface ScrapeResultsProps {
 function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
   const [filterStatus, setFilterStatus] = useState<'all' | 'done' | 'not_found' | 'error'>('all')
 
-  // --- speed / ETA tracking ---
   const startTimeRef = useRef<number | null>(null)
-  const [speed, setSpeed] = useState(0)   // items/sec
-  const [eta, setEta] = useState<number | null>(null) // seconds remaining
+  const [speed, setSpeed] = useState(0)
+  const [eta, setEta] = useState<number | null>(null)
   const prevProcessedRef = useRef(0)
 
   const stats = {
@@ -102,8 +101,8 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
 
   if (results.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-        <svg className="w-12 h-12 mb-3 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
+        <svg className="w-12 h-12 mb-3 text-gray-200 dark:text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
             d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
@@ -116,7 +115,7 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
   return (
     <div>
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
             {([
@@ -131,7 +130,7 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
                 className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-colors ${
                   filterStatus === value
                     ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-500 border-gray-200 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600'
+                    : 'bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-200 hover:text-blue-600 dark:hover:text-blue-400'
                 }`}
               >
                 {label} <span className="opacity-70">({count})</span>
@@ -143,8 +142,7 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
         {stats.done > 0 && (
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700
-              border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -156,8 +154,8 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
       </div>
 
       {/* Progress bar */}
-      <div className="px-4 py-2.5 border-b border-gray-50 bg-gray-50/50">
-        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-gray-50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50">
+        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-300 ease-out"
             style={{
@@ -171,24 +169,24 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin border border-gray-200 rounded-b-xl">
-        <table className="w-full text-sm border-collapse [&_td]:border-r [&_td]:border-gray-200 [&_td:last-child]:border-r-0">
+      <div className="overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin border border-gray-200 dark:border-gray-700 rounded-b-xl">
+        <table className="w-full text-sm border-collapse [&_td]:border-r [&_td]:border-gray-200 dark:[&_td]:border-gray-700 [&_td:last-child]:border-r-0">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-gray-100 text-gray-700 text-xs border-b-2 border-gray-300">
-              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200">Durum</th>
-              <th className="px-4 py-3 text-left font-semibold border-r border-gray-200">Firma Adı</th>
-              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200">Şehir</th>
-              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200">PLZ</th>
-              <th className="px-4 py-3 text-left font-semibold border-r border-gray-200">E-posta</th>
-              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200">Telefon</th>
-              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200">Kaynak</th>
+            <tr className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs border-b-2 border-gray-300 dark:border-gray-600">
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Durum</th>
+              <th className="px-4 py-3 text-left font-semibold border-r border-gray-200 dark:border-gray-600">Firma Adı</th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Şehir</th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200 dark:border-gray-600">PLZ</th>
+              <th className="px-4 py-3 text-left font-semibold border-r border-gray-200 dark:border-gray-600">E-posta</th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Telefon</th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Kaynak</th>
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Link</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {filtered.map((r) => {
               return (
-                <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     <StatusBadge status={r.status} />
                     {r.status === 'error' && r.error && (
@@ -196,60 +194,77 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    <p className="font-medium text-gray-800 text-xs truncate max-w-[200px]">{r.reName}</p>
-                    {r.reName2 && <p className="text-gray-400 text-xs truncate max-w-[200px]">{r.reName2}</p>}
+                    <p className="font-medium text-gray-800 dark:text-gray-100 text-xs truncate max-w-[200px]">{r.reName}</p>
+                    {r.reName2 && <p className="text-gray-400 dark:text-gray-500 text-xs truncate max-w-[200px]">{r.reName2}</p>}
                   </td>
-                  <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">
-                    {r.reOrt || <span className="text-gray-300">—</span>}
+                  <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300 text-xs whitespace-nowrap">
+                    {r.reOrt || <span className="text-gray-300 dark:text-gray-600">—</span>}
                   </td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs font-mono whitespace-nowrap">
-                    {r.rePlz || <span className="text-gray-300">—</span>}
+                  <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400 text-xs font-mono whitespace-nowrap">
+                    {r.rePlz || <span className="text-gray-300 dark:text-gray-600">—</span>}
                   </td>
                   <td className="px-4 py-2.5 text-xs">
                     {r.emails && r.emails.length > 0 ? (
                       <div className="flex flex-col gap-0.5">
                         {r.emails.map((email, i) => (
                           <a key={i} href={`mailto:${email}`}
-                            className="text-blue-600 hover:underline truncate max-w-[160px] block">
+                            className="text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[160px] block">
                             {email}
                           </a>
                         ))}
                       </div>
                     ) : r.email ? (
-                      <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a>
+                      <a href={`mailto:${r.email}`} className="text-blue-600 dark:text-blue-400 hover:underline">{r.email}</a>
                     ) : (
-                      <span className="text-gray-300">—</span>
+                      <span className="text-gray-300 dark:text-gray-600">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-xs">
                     {r.phones && r.phones.length > 0 ? (
                       <div className="flex flex-col gap-0.5">
                         {r.phones.map((p, i) => (
-                          <span key={i} className="text-green-700 whitespace-nowrap">{p}</span>
+                          <span key={i} className="text-green-700 dark:text-green-400 whitespace-nowrap">{p}</span>
                         ))}
                       </div>
                     ) : r.telefonnummer ? (
-                      <span className="text-green-700">{r.telefonnummer}</span>
+                      <span className="text-green-700 dark:text-green-400">{r.telefonnummer}</span>
                     ) : (
-                      <span className="text-gray-300">—</span>
+                      <span className="text-gray-300 dark:text-gray-600">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
-                    {r.source || <span className="text-gray-300">—</span>}
+                  <td className="px-4 py-2.5 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                    {r.source || <span className="text-gray-300 dark:text-gray-600">—</span>}
                   </td>
                   <td className="px-4 py-2.5 text-xs whitespace-nowrap">
-                    <a
-                      href={gsLink(r.reName, r.reOrt)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-yellow-600 hover:text-yellow-700 hover:underline"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      GS
-                    </a>
+                    <div className="inline-flex items-center gap-2">
+                      {r.website && (
+                        <a
+                          href={r.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
+                          title={r.website}
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          {new URL(r.website).hostname.replace(/^www\./, '')}
+                        </a>
+                      )}
+                      <a
+                        href={gsLink(r.reName, r.reOrt)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:underline"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        GS
+                      </a>
+                    </div>
                   </td>
                 </tr>
               )
@@ -261,6 +276,5 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
   )
 }
 
-// memo prevents re-render when parent re-renders for unrelated state changes.
 const ScrapeResults = memo(ScrapeResultsInner)
 export default ScrapeResults

@@ -6,6 +6,22 @@
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
+/* FileUpload shrink animation — triggered when a file is successfully loaded */
+@keyframes file-shrink {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+.animate-file-shrink {
+  animation: file-shrink 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top center;
+}
+
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;

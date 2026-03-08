@@ -6,7 +6,7 @@ import FileUpload from '@/components/main/FileUpload'
 import CompanyTable from '@/components/table/CompanyTable'
 import ScrapeResults from '@/components/main/ScrapeResults'
 import { Company, ScrapeResult } from '@/data'
-import { scrapeCompanies } from '@/data/scraper'
+import { scrapeCompanies, FilterMode } from '@/data/scraper'
 
 export default function HomePage() {
   const [companies, setCompanies] = useState<Company[]>([])
@@ -24,6 +24,7 @@ export default function HomePage() {
   // useDeferredValue lets React deprioritise the heavy table re-render so
   // the progress bar and toolbar stay responsive while rows are updating.
   const deferredResults = useDeferredValue(results)
+  const [filterMode, setFilterMode] = useState<FilterMode>('and')
   const [isScraping, setIsScraping] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [activeTab, setActiveTab] = useState<'companies' | 'results'>('companies')
@@ -58,7 +59,8 @@ export default function HomePage() {
         selected,
         (r) => startTransition(() => setResults(r)),
         controller.signal,
-        (sid) => { sessionIdRef.current = sid }
+        (sid) => { sessionIdRef.current = sid },
+        filterMode,
       )
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) throw e
@@ -97,7 +99,8 @@ export default function HomePage() {
           return Array.from(map.values())
         })),
         controller.signal,
-        (sid) => { sessionIdRef.current = sid }
+        (sid) => { sessionIdRef.current = sid },
+        filterMode,
       )
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) throw e
@@ -133,9 +136,9 @@ export default function HomePage() {
         <FileUpload onCompaniesLoaded={handleCompaniesLoaded} />
 
         {companies.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors duration-200">
             {/* Tab Bar */}
-            <div className="border-b border-gray-100">
+            <div className="border-b border-gray-100 dark:border-gray-700">
               <div className="flex items-center justify-between px-4">
               <div className="flex">
                 <button
@@ -143,11 +146,11 @@ export default function HomePage() {
                   className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'companies'
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                 >
                   Şirketler
-                  <span className="ml-2 bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">
+                  <span className="ml-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-0.5 rounded-full">
                     {visibleCompanies.length}
                   </span>
                 </button>
@@ -156,7 +159,7 @@ export default function HomePage() {
                   className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'results'
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                 >
                   Sonuçlar
@@ -220,13 +223,35 @@ export default function HomePage() {
                   </>
                 )}
                 {activeTab === 'companies' && (
+                  <div className="flex items-center gap-3">
+                    {/* Filter mode pill-toggle: ON=AND gate, OFF=OR gate */}
+                    <button
+                      type="button"
+                      onClick={() => !isScraping && setFilterMode(filterMode === 'and' ? 'or' : 'and')}
+                      disabled={isScraping}
+                      title={filterMode === 'and' ? 'VE kapısı: ikisi de varsa atla' : 'VEYA kapısı: biri varsa atla'}
+                      className={`relative flex items-center h-7 w-[84px] rounded-full px-0.5 transition-colors duration-200 disabled:opacity-50 cursor-pointer select-none ${
+                        filterMode === 'and' ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'
+                      }`}
+                    >
+                      {/* sliding ball */}
+                      <span className={`relative z-10 inline-flex w-6 h-6 rounded-full bg-white shadow flex-shrink-0 transition-transform duration-200 ${
+                        filterMode === 'and' ? 'translate-x-[52px]' : 'translate-x-0'
+                      }`} />
+                      {/* label — opposite side of the ball */}
+                      <span className={`absolute inset-0 flex items-center text-[11px] font-semibold text-white pointer-events-none transition-all duration-200 ${
+                        filterMode === 'and' ? 'justify-start pl-2.5' : 'justify-end pr-2.5'
+                      }`}>
+                        {filterMode === 'and' ? 'VE' : 'VEYA'}
+                      </span>
+                    </button>
                   <button
                     onClick={handleScrape}
                     disabled={selectedCount === 0 || isScraping}
                     className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
                       selectedCount > 0 && !isScraping
                         ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                     }`}
                   >
                     {isScraping ? (
@@ -244,6 +269,7 @@ export default function HomePage() {
                       </>
                     )}
                   </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -251,12 +277,12 @@ export default function HomePage() {
 
             {activeTab === 'companies' ? (
               visibleCompanies.length === 0 && results.length > 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
                   <svg className="w-12 h-12 mb-3 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p className="text-sm font-medium text-gray-600">Tüm şirketler tarandı</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Tüm şirketler tarandı</p>
                   <p className="text-xs mt-1">Sonuçları görmek için &quot;Sonuçlar&quot; sekmesine geçin</p>
                 </div>
               ) : (

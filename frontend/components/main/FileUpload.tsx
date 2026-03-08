@@ -152,7 +152,7 @@ export default function FileUpload({ onCompaniesLoaded }: FileUploadProps) {
   // Compact bar — shown after a file is successfully loaded
   if (fileName && !loading) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 flex items-center gap-3">
+      <div key={fileName} className="animate-file-shrink bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 px-4 py-3 flex items-center gap-3 transition-colors">
         <input
           ref={inputRef}
           type="file"
@@ -160,19 +160,19 @@ export default function FileUpload({ onCompaniesLoaded }: FileUploadProps) {
           className="hidden"
           onChange={(e) => handleFile(e.target.files?.[0])}
         />
-        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+          <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <span className="text-sm text-gray-700 font-medium truncate flex-1">{fileName}</span>
+        <span className="text-sm text-gray-700 dark:text-gray-200 font-medium truncate flex-1">{fileName}</span>
         {error && (
           <span className="text-xs text-red-500 flex-shrink-0">{error}</span>
         )}
         <button
           onClick={() => inputRef.current?.click()}
-          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-lg px-3 py-1.5 transition-colors flex-shrink-0"
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 border border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500 rounded-lg px-3 py-1.5 transition-colors flex-shrink-0"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -186,13 +186,13 @@ export default function FileUpload({ onCompaniesLoaded }: FileUploadProps) {
 
   // Full upload UI — shown before a file is loaded
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 transition-colors">
       <div className="flex items-center gap-2 mb-4">
         <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
             d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
         </svg>
-        <h2 className="text-sm font-semibold text-gray-700">Şirket Dosyası Yükle</h2>
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Şirket Dosyası Yükle</h2>
       </div>
 
       <div
@@ -201,7 +201,9 @@ export default function FileUpload({ onCompaniesLoaded }: FileUploadProps) {
         onDragLeave={() => setIsDragging(false)}
         onClick={() => inputRef.current?.click()}
         className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-          isDragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+          isDragging
+            ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+            : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700/50'
         }`}
       >
         <input
@@ -215,29 +217,29 @@ export default function FileUpload({ onCompaniesLoaded }: FileUploadProps) {
         {loading ? (
           <div className="flex flex-col items-center gap-3">
             <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-gray-500">Dosya okunuyor...</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Dosya okunuyor...</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3">
-            <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center">
-              <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-14 h-14 bg-gray-100 dark:bg-gray-700 rounded-2xl flex items-center justify-center">
+              <svg className="w-7 h-7 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                   d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-700">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
                 Dosyayı buraya sürükleyin veya{' '}
-                <span className="text-blue-600">seçmek için tıklayın</span>
+                <span className="text-blue-600 dark:text-blue-400">seçmek için tıklayın</span>
               </p>
-              <p className="text-xs text-gray-400 mt-1">Desteklenen formatlar: .xlsx, .xls, .csv</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Desteklenen formatlar: .xlsx, .xls, .csv</p>
             </div>
           </div>
         )}
       </div>
 
       {error && (
-        <div className="mt-3 flex items-center gap-2 text-red-600 text-xs bg-red-50 px-3 py-2 rounded-lg">
+        <div className="mt-3 flex items-center gap-2 text-red-600 dark:text-red-400 text-xs bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">
           <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -246,11 +248,11 @@ export default function FileUpload({ onCompaniesLoaded }: FileUploadProps) {
         </div>
       )}
 
-      <div className="mt-4 p-3 bg-blue-50 rounded-xl">
-        <p className="text-xs font-medium text-blue-700 mb-1">Desteklenen Excel sütunları:</p>
-        <div className="flex flex-wrap gap-1.5 text-xs text-blue-600 font-mono">
+      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+        <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-1">Desteklenen Excel sütunları:</p>
+        <div className="flex flex-wrap gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-mono">
           {['En Objekt', 'Re Name', 'Re Ort', 'Re Plz', 'Re Strasse', 'email', 'Telefonnummer'].map((col) => (
-            <span key={col} className="bg-blue-100 px-2 py-0.5 rounded">{col}</span>
+            <span key={col} className="bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded">{col}</span>
           ))}
         </div>
       </div>

@@ -18,11 +18,16 @@ function normalizeResult(r: ScrapeResult): ScrapeResult {
  * animation frame — this prevents dozens of React re-renders per second
  * when 30+ workers finish roughly simultaneously.
  */
+/** "and" = switch ON  → skip only if BOTH email+phone exist (AND gate)
+ *  "or"  = switch OFF → skip if EITHER email or phone exists (OR gate)  */
+export type FilterMode = 'and' | 'or'
+
 export async function scrapeCompanies(
   companies: Company[],
   onProgress: (results: ScrapeResult[]) => void,
   signal?: AbortSignal,
-  onSessionId?: (sessionId: string) => void
+  onSessionId?: (sessionId: string) => void,
+  filterMode: FilterMode = 'and'
 ): Promise<ScrapeResult[]> {
   const accumulated: ScrapeResult[] = companies.map((c) => ({
     ...c,
@@ -37,12 +42,14 @@ export async function scrapeCompanies(
 
   onProgress([...accumulated])
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:10000'
+
   let response: Response
   try {
-    response = await fetch('/api/scrape/stream', {
+    response = await fetch(`${API_URL}/api/scrape/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companies }),
+      body: JSON.stringify({ companies, filterMode }),
       signal,
     })
   } catch (err) {

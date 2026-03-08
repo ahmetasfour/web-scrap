@@ -6,7 +6,6 @@ import (
 	"github.com/ahmet4dev/gol-lib/logging"
 	gol_middlewares "github.com/ahmet4dev/gol-lib/middlewares"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 	"go.uber.org/zap"
 
 	handler "webscraper/handlers/http"
@@ -26,23 +25,19 @@ func main() {
 	}
 
 	engine := scraper.New(scraper.Config{
-		Concurrency:    cfg.Scraper.Concurrency,
-		RequestDelay:   cfg.Scraper.RequestDelay(),
-		RandomDelay:    cfg.Scraper.RandomDelay(),
-		RetryCount:     cfg.Scraper.RetryCount,
-		RequestTimeout: cfg.Scraper.RequestTimeout(),
-		MatchThreshold: cfg.Matcher.Threshold,
+		Concurrency:     cfg.Scraper.Concurrency,
+		RequestDelay:    cfg.Scraper.RequestDelay(),
+		RandomDelay:     cfg.Scraper.RandomDelay(),
+		RetryCount:      cfg.Scraper.RetryCount,
+		RequestTimeout:  cfg.Scraper.RequestTimeout(),
+		MatchThreshold:  cfg.Matcher.Threshold,
+		SearchEngineURL: cfg.Scraper.SearchEngineURL,
+		CacheFile:       cfg.Scraper.CacheFile,
 	})
 
 	app := fiber.New(cfg.Server.Config)
 
-	// CORS middleware'ini ekle - SSE streaming için gerekli
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:3000,http://localhost:3001",
-		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders: "Content-Type,Authorization",
-	}))
-
+	// CORS is configured via config.json server.cors and applied by AddDefaultMiddlewares.
 	gol_middlewares.AddDefaultMiddlewares(app, cfg.Server)
 
 	h := handler.New(engine)

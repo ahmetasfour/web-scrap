@@ -15,11 +15,15 @@ type Config struct {
 }
 
 type ScraperConfig struct {
-	Concurrency       int `json:"concurrency"`
-	RequestDelayMs    int `json:"requestDelayMs"`
-	RandomDelayMs     int `json:"randomDelayMs"`
-	RetryCount        int `json:"retryCount"`
-	RequestTimeoutSec int `json:"requestTimeoutSec"`
+	Concurrency       int    `json:"concurrency"`
+	RequestDelayMs    int    `json:"requestDelayMs"`
+	RandomDelayMs     int    `json:"randomDelayMs"`
+	RetryCount        int    `json:"retryCount"`
+	RequestTimeoutSec int    `json:"requestTimeoutSec"`
+	SearchEngineURL   string `json:"searchEngineURL"`
+	// CacheFile is the path to the JSON file used to persist scrape results
+	// across server restarts.  Set to "" to disable file persistence.
+	CacheFile string `json:"cacheFile"`
 }
 
 type MatcherConfig struct {
@@ -34,11 +38,12 @@ func Defaults() Config {
 			Port:   8080,
 		},
 		Scraper: ScraperConfig{
-			Concurrency:       30,
-			RequestDelayMs:    150,
-			RandomDelayMs:     100,
-			RetryCount:        0,
-			RequestTimeoutSec: 15,
+			Concurrency:       5,
+			RequestDelayMs:    2000,
+			RandomDelayMs:     1000,
+			RetryCount:        3,
+			RequestTimeoutSec: 60,
+			CacheFile:         "scraper_cache.json",
 		},
 		Matcher: MatcherConfig{Threshold: 0.55},
 	}

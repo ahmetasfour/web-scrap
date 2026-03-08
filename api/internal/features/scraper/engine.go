@@ -2,8 +2,8 @@ package scraper
 
 import (
 	"context"
-	"net/url"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -14,6 +14,7 @@ import (
 	"github.com/gocolly/colly/v2/extensions"
 	"go.uber.org/zap"
 
+	"webscraper/internal/cache"
 	"webscraper/internal/features/model"
 )
 
@@ -28,9 +29,10 @@ var sharedTransport = &http.Transport{
 
 // ContactInfo holds extracted contact data from a single source.
 type ContactInfo struct {
-	Emails []string
-	Phones []string
-	Source string
+	Emails  []string
+	Phones  []string
+	Source  string
+	Website string
 }
 
 // Source is the interface implemented by each scraping target.
@@ -41,12 +43,14 @@ type Source interface {
 
 // Config controls the scraping behaviour.
 type Config struct {
-	Concurrency    int
-	RequestDelay   time.Duration
-	RandomDelay    time.Duration
-	RetryCount     int
-	RequestTimeout time.Duration
-	MatchThreshold float64
+	Concurrency     int
+	RequestDelay    time.Duration
+	RandomDelay     time.Duration
+	RetryCount      int
+	RequestTimeout  time.Duration
+	MatchThreshold  float64
+	SearchEngineURL string // base URL of the SearXNG instance; empty = use default
+	CacheFile       string // path to JSON cache file; empty = in-memory only
 }
 
 // Engine manages parallel scraping with rate limiting and retries.
@@ -56,20 +60,19 @@ type Engine struct {
 }
 
 // New creates an Engine with the given config.
+// GelbeSeitenSource is the sole scraping backend; the cache is shared across
+// all concurrent goroutines via the injected *cache.Store.
 func New(cfg Config) *Engine {
+	c := cache.New(cfg.CacheFile)
 	return &Engine{
 		cfg: cfg,
 		sources: []Source{
-			&GelbeSeitenScraper{},
-			&DasOertlicheScraper{},
+			&GelbeSeitenSource{cache: c},
 		},
 	}
 }
 
 // newCollector creates a fresh collector for each scrape call.
-// Each collector visits exactly one URL, so per-domain rate-limit rules have
-// no effect and are omitted. The shared transport enables TCP keep-alive
-// connection reuse across all concurrent goroutines.
 func newCollector(cfg Config, allowedDomains ...string) *colly.Collector {
 	c := colly.NewCollector(
 		colly.AllowedDomains(allowedDomains...),
@@ -90,9 +93,7 @@ func dedupeKey(c model.Company) string {
 
 // RunStream scrapes all companies concurrently and sends each result to resultCh
 // as soon as it completes, enabling real-time streaming to the client.
-// The channel is closed when all companies have been processed.
-// Cancelling ctx stops dispatching new work; in-flight goroutines finish naturally.
-func (e *Engine) RunStream(ctx context.Context, companies []model.Company, resultCh chan<- model.ScrapeResult) {
+func (e *Engine) RunStream(ctx context.Context, companies []model.Company, filterMode model.FilterMode, resultCh chan<- model.ScrapeResult) {
 	defer close(resultCh)
 
 	type group struct {
@@ -115,7 +116,6 @@ func (e *Engine) RunStream(ctx context.Context, companies []model.Company, resul
 	var wg sync.WaitGroup
 
 	for _, key := range orderedKeys {
-		// Stop dispatching new work when context is cancelled.
 		select {
 		case <-ctx.Done():
 			goto done
@@ -141,7 +141,7 @@ func (e *Engine) RunStream(ctx context.Context, companies []model.Company, resul
 				}
 			}()
 
-			result := e.scrapeOne(g.canonical)
+			result := e.scrapeOne(g.canonical, filterMode)
 			for _, idx := range g.indices {
 				r := result
 				r.Company = companies[idx]
@@ -155,7 +155,7 @@ done:
 }
 
 // Run scrapes all companies concurrently and returns results in the same order.
-func (e *Engine) Run(companies []model.Company) []model.ScrapeResult {
+func (e *Engine) Run(companies []model.Company, filterMode model.FilterMode) []model.ScrapeResult {
 	results := make([]model.ScrapeResult, len(companies))
 
 	type group struct {
@@ -197,7 +197,7 @@ func (e *Engine) Run(companies []model.Company) []model.ScrapeResult {
 					}
 				}
 			}()
-			uniqueResults[idx] = e.scrapeOne(g.canonical)
+			uniqueResults[idx] = e.scrapeOne(g.canonical, filterMode)
 		}(j, groups[key])
 	}
 	wg.Wait()
@@ -214,10 +214,24 @@ func (e *Engine) Run(companies []model.Company) []model.ScrapeResult {
 	return results
 }
 
-// scrapeOne runs all sources in parallel and returns on the first successful hit.
-func (e *Engine) scrapeOne(company model.Company) model.ScrapeResult {
-	if company.Email != "" && company.Telefonnummer != "" {
-		logging.Logger.Info("skipping — already complete", zap.String("company", company.ReName))
+// shouldSkip reports whether a company should be skipped based on its existing
+// data and the requested filter mode.
+func shouldSkip(company model.Company, filterMode model.FilterMode) bool {
+	switch filterMode {
+	case model.FilterOr:
+		return company.Email != "" || company.Telefonnummer != ""
+	default:
+		return company.Email != "" && company.Telefonnummer != ""
+	}
+}
+
+// scrapeOne runs the website pipeline and returns the result.
+func (e *Engine) scrapeOne(company model.Company, filterMode model.FilterMode) model.ScrapeResult {
+	if shouldSkip(company, filterMode) {
+		logging.Logger.Info("skipping — already complete",
+			zap.String("company", company.ReName),
+			zap.String("filterMode", filterMode),
+		)
 		return model.ScrapeResult{
 			Company: company,
 			Status:  "done",
@@ -227,69 +241,31 @@ func (e *Engine) scrapeOne(company model.Company) model.ScrapeResult {
 		}
 	}
 
-	type hit struct {
-		emails []string
-		phones []string
-		source string
-	}
-
-	hitCh := make(chan hit, len(e.sources))
-	var wg sync.WaitGroup
-
 	for _, src := range e.sources {
-		wg.Add(1)
-		go func(s Source) {
-			defer wg.Done()
-			defer func() {
-				if r := recover(); r != nil {
-					logging.Logger.Error("panic in source",
-						zap.String("source", s.Name()),
-						zap.String("company", company.ReName),
-						zap.Any("panic", r),
-					)
-				}
-			}()
-
-			info, err := s.Scrape(company, e.cfg)
-			if err != nil {
-				logging.Logger.Warn("scrape error",
-					zap.String("source", s.Name()),
-					zap.String("company", company.ReName),
-					zap.Error(err),
-				)
-				return
-			}
-			if len(info.Emails) > 0 || len(info.Phones) > 0 {
-				hitCh <- hit{info.Emails, info.Phones, info.Source}
-			}
-		}(src)
-	}
-
-	go func() {
-		wg.Wait()
-		close(hitCh)
-	}()
-
-	var best *hit
-	for h := range hitCh {
-		hCopy := h
-		if best == nil || isBetterHit(hCopy.emails, hCopy.phones, best.emails, best.phones) {
-			best = &hCopy
+		info, err := src.Scrape(company, e.cfg)
+		if err != nil {
+			logging.Logger.Warn("scrape error",
+				zap.String("source", src.Name()),
+				zap.String("company", company.ReName),
+				zap.Error(err),
+			)
+			continue
 		}
-	}
-	if best != nil {
-		logging.Logger.Info("found",
-			zap.String("source", best.source),
-			zap.String("company", company.ReName),
-			zap.Strings("emails", best.emails),
-			zap.Strings("phones", best.phones),
-		)
-		return model.ScrapeResult{
-			Company: company,
-			Status:  "done",
-			Emails:  best.emails,
-			Phones:  best.phones,
-			Source:  best.source,
+		if len(info.Emails) > 0 || len(info.Phones) > 0 {
+			logging.Logger.Info("found",
+				zap.String("source", info.Source),
+				zap.String("company", company.ReName),
+				zap.Strings("emails", info.Emails),
+				zap.Strings("phones", info.Phones),
+			)
+			return model.ScrapeResult{
+				Company: company,
+				Status:  "done",
+				Emails:  info.Emails,
+				Phones:  info.Phones,
+				Source:  info.Source,
+				Website: info.Website,
+			}
 		}
 	}
 
@@ -298,21 +274,6 @@ func (e *Engine) scrapeOne(company model.Company) model.ScrapeResult {
 		zap.String("city", company.ReOrt),
 	)
 	return model.ScrapeResult{Company: company, Status: "not_found"}
-}
-
-func isBetterHit(aEmails, aPhones, bEmails, bPhones []string) bool {
-	aHasEmail := len(aEmails) > 0
-	bHasEmail := len(bEmails) > 0
-	if aHasEmail != bHasEmail {
-		return aHasEmail
-	}
-	if len(aEmails) != len(bEmails) {
-		return len(aEmails) > len(bEmails)
-	}
-	if len(aPhones) != len(bPhones) {
-		return len(aPhones) > len(bPhones)
-	}
-	return false
 }
 
 // --- helpers shared across sources ---
@@ -364,6 +325,35 @@ func cleanEmail(s string) string {
 		strings.HasSuffix(s, ".svg") || strings.HasSuffix(s, ".webp") {
 		return ""
 	}
+
+	// Structural validation: local part and domain
+	at := strings.IndexByte(s, '@')
+	local := s[:at]
+	domain := s[at+1:]
+
+	// Local part: must be non-empty, no leading/trailing/consecutive dots
+	if len(local) == 0 ||
+		strings.HasPrefix(local, ".") ||
+		strings.HasSuffix(local, ".") ||
+		strings.Contains(local, "..") {
+		return ""
+	}
+
+	// Domain: must have a valid alphabetic TLD (letters only, 2–24 chars)
+	dotIdx := strings.LastIndexByte(domain, '.')
+	if dotIdx < 1 || dotIdx == len(domain)-1 {
+		return ""
+	}
+	tld := domain[dotIdx+1:]
+	if len(tld) < 2 || len(tld) > 24 {
+		return ""
+	}
+	for _, r := range tld {
+		if r < 'a' || r > 'z' {
+			return ""
+		}
+	}
+
 	return s
 }
 
@@ -401,7 +391,7 @@ func cleanPhone(s string) string {
 			onlyDigits.WriteRune(r)
 		}
 	}
-	if digits < 9 || digits > 14 {
+	if digits < 10 || digits > 15 {
 		return ""
 	}
 	d := onlyDigits.String()

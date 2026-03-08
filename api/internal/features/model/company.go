@@ -19,16 +19,28 @@ type Company struct {
 // ScrapeResult embeds Company and adds scraped contact data.
 type ScrapeResult struct {
 	Company
-	Status string   `json:"status"` // "done", "not_found", "error"
-	Emails []string `json:"emails"`
-	Phones []string `json:"phones"`
-	Source string   `json:"source"`
-	Error  string   `json:"error,omitempty"`
+	Status  string   `json:"status"` // "done", "not_found", "error"
+	Emails  []string `json:"emails"`
+	Phones  []string `json:"phones"`
+	Source  string   `json:"source"`
+	Website string   `json:"website,omitempty"`
+	Error   string   `json:"error,omitempty"`
 }
+
+// FilterMode controls which companies are skipped during scraping.
+//   - "and" (switch ON)  – skip only when BOTH email AND phone already exist  → scrape if either is missing
+//   - "or"  (switch OFF) – skip when EITHER email OR phone already exists     → scrape only if both are missing
+type FilterMode = string
+
+const (
+	FilterAnd FilterMode = "and" // switch ON  – AND gate
+	FilterOr  FilterMode = "or"  // switch OFF – OR  gate
+)
 
 // ScrapeRequest is the JSON body for POST /api/scrape.
 type ScrapeRequest struct {
-	Companies []Company `json:"companies"`
+	Companies  []Company  `json:"companies"`
+	FilterMode FilterMode `json:"filterMode"` // "and" | "or", default: "and"
 }
 
 // ScrapeResponse is the JSON body returned by POST /api/scrape.

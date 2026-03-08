@@ -19,6 +19,7 @@ export interface ScrapeResult extends Company {
   emails: string[]
   phones: string[]
   source: string
+  website?: string
   error: string
 }
 

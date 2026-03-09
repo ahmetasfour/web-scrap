@@ -5,8 +5,9 @@ import DashboardLayout from '@/layouts/dashboard/DashboardLayout'
 import FileUpload from '@/components/main/FileUpload'
 import CompanyTable from '@/components/table/CompanyTable'
 import ScrapeResults from '@/components/main/ScrapeResults'
+import NotFoundTable from '@/components/main/NotFoundTable'
 import { Company, ScrapeResult } from '@/data'
-import { scrapeCompanies, FilterMode } from '@/data/scraper'
+import { scrapeCompanies } from '@/data/scraper'
 
 export default function HomePage() {
   const [companies, setCompanies] = useState<Company[]>([])
@@ -24,10 +25,9 @@ export default function HomePage() {
   // useDeferredValue lets React deprioritise the heavy table re-render so
   // the progress bar and toolbar stay responsive while rows are updating.
   const deferredResults = useDeferredValue(results)
-  const [filterMode, setFilterMode] = useState<FilterMode>('and')
   const [isScraping, setIsScraping] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
-  const [activeTab, setActiveTab] = useState<'companies' | 'results'>('companies')
+  const [activeTab, setActiveTab] = useState<'companies' | 'results' | 'notfound'>('companies')
   const abortControllerRef = useRef<AbortController | null>(null)
   const lastSelectedRef = useRef<Company[]>([])
   const sessionIdRef = useRef<string | null>(null)
@@ -60,7 +60,7 @@ export default function HomePage() {
         (r) => startTransition(() => setResults(r)),
         controller.signal,
         (sid) => { sessionIdRef.current = sid },
-        filterMode,
+        'and',
       )
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) throw e
@@ -100,7 +100,7 @@ export default function HomePage() {
         })),
         controller.signal,
         (sid) => { sessionIdRef.current = sid },
-        filterMode,
+        'and',
       )
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) throw e
@@ -126,8 +126,24 @@ export default function HomePage() {
     setActiveTab('companies')
   }
 
+  const notFoundResults = useMemo(() => results.filter((r) => {
+    if (r.status === 'not_found') return true
+    if (r.status === 'done') {
+      const hasEmail = (r.emails && r.emails.length > 0) || !!r.email
+      const hasPhone = (r.phones && r.phones.length > 0) || !!r.telefonnummer
+      return !hasEmail || !hasPhone
+    }
+    return false
+  }), [results])
+
+  const foundResults = useMemo(() => results.filter((r) => {
+    if (r.status !== 'done') return false
+    const hasEmail = (r.emails && r.emails.length > 0) || !!r.email
+    const hasPhone = (r.phones && r.phones.length > 0) || !!r.telefonnummer
+    return hasEmail && hasPhone
+  }), [results])
+
   const selectedCount = selectedIds.size
-  const processedCount = processedIds.size
   const totalScanning = results.length
 
   return (
@@ -162,13 +178,28 @@ export default function HomePage() {
                       : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                 >
-                  Sonuçlar
+                  Bulunan Şirketler
                   {results.length > 0 && (
                     <span className="ml-2 bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full">
-                      {processedCount}/{totalScanning}
+                      {foundResults.length}/{totalScanning}
                     </span>
                   )}
                 </button>
+                {notFoundResults.length > 0 && (
+                  <button
+                    onClick={() => setActiveTab('notfound')}
+                    className={`px-5 py-3.5 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'notfound'
+                        ? 'border-orange-500 text-orange-600'
+                        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    Bulunamayan Şirketler
+                    <span className="ml-2 bg-orange-100 text-orange-600 text-xs px-2 py-0.5 rounded-full">
+                      {notFoundResults.length}/{totalScanning}
+                    </span>
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -224,27 +255,6 @@ export default function HomePage() {
                 )}
                 {activeTab === 'companies' && (
                   <div className="flex items-center gap-3">
-                    {/* Filter mode pill-toggle: ON=AND gate, OFF=OR gate */}
-                    <button
-                      type="button"
-                      onClick={() => !isScraping && setFilterMode(filterMode === 'and' ? 'or' : 'and')}
-                      disabled={isScraping}
-                      title={filterMode === 'and' ? 'VE kapısı: ikisi de varsa atla' : 'VEYA kapısı: biri varsa atla'}
-                      className={`relative flex items-center h-7 w-[84px] rounded-full px-0.5 transition-colors duration-200 disabled:opacity-50 cursor-pointer select-none ${
-                        filterMode === 'and' ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
-                    >
-                      {/* sliding ball */}
-                      <span className={`relative z-10 inline-flex w-6 h-6 rounded-full bg-white shadow flex-shrink-0 transition-transform duration-200 ${
-                        filterMode === 'and' ? 'translate-x-[52px]' : 'translate-x-0'
-                      }`} />
-                      {/* label — opposite side of the ball */}
-                      <span className={`absolute inset-0 flex items-center text-[11px] font-semibold text-white pointer-events-none transition-all duration-200 ${
-                        filterMode === 'and' ? 'justify-start pl-2.5' : 'justify-end pr-2.5'
-                      }`}>
-                        {filterMode === 'and' ? 'VE' : 'VEYA'}
-                      </span>
-                    </button>
                   <button
                     onClick={handleScrape}
                     disabled={selectedCount === 0 || isScraping}
@@ -292,8 +302,17 @@ export default function HomePage() {
                 onSelectionChange={setSelectedIds}
               />
               )
-            ) : (
+            ) : activeTab === 'results' ? (
               <ScrapeResults results={deferredResults} isScraping={isScraping} />
+            ) : (
+              <NotFoundTable
+                results={deferredResults}
+                onDetailedScan={(selected) => {
+                  // TODO: SaaS entegrasyonu — seçili şirketleri detaylı tara
+                  console.log('Detaylı tarama için seçilen şirketler:', selected)
+                  alert(`${selected.length} şirket detaylı tarama için seçildi.\n(SaaS entegrasyonu yakında)`)
+                }}
+              />
             )}
           </div>
         )}

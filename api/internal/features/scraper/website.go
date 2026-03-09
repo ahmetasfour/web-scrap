@@ -12,31 +12,32 @@ import (
 // GelbeSeitenSource implements Source by running the unified GelbeSeiten
 // pipeline: search → first result → extract phone / email / website.
 //
-// Cache behaviour:
-//   - Before every search the cache is checked by key (name|city).
-//   - A result is written to the cache ONLY when at least one contact field
-//     (phone, email, or website) was actually found.  Empty profiles are never
-//     archived so the next run will try GelbeSeiten again.
-//   - The cache is persisted to scraper_cache.json after every successful hit
-//     so results survive server restarts.
+// Cache behaviour (scraper_cache.json):
+//   - FOUND table   – Before every search the found-cache is checked by key.
+//     A result is written only when at least one contact field was found.
+//   - NOT_FOUND table – Companies that returned no GelbeSeiten results are
+//     stored so the next run skips them entirely (no HTTP request sent).
+//   - Both tables survive server restarts via the shared JSON file.
 type GelbeSeitenSource struct {
 	cache *cache.Store
 }
 
 func (g *GelbeSeitenSource) Name() string { return "gelbeseiten" }
 
-// Scrape runs:  cache-lookup → gelbeseiten search → archive result → return.
+// Scrape runs:
+//  1. Check FOUND cache   → return stored data (skip request)
+//  2. Check NOT_FOUND cache → return empty  (skip request)
+//  3. Scrape GelbeSeiten
+//  4. Save result to the appropriate cache table
 func (g *GelbeSeitenSource) Scrape(company model.Company, cfg Config) (*ContactInfo, error) {
 	empty := &ContactInfo{Source: g.Name()}
-
-	// ── 1. Cache lookup ─────────────────────────────────────────────────────
 	key := cache.BuildKey(company.ReName, company.ReOrt)
 
+	// ── 1. FOUND cache lookup ─────────────────────────────────────────────────
 	if hit, ok := g.cache.Get(key); ok {
-		logging.Logger.Info("cache hit — skipping search",
+		logging.Logger.Info("cache_found_company — skipping search",
 			zap.String("company", company.ReName),
 			zap.String("city", company.ReOrt),
-			zap.String("key", key),
 			zap.Time("cachedAt", hit.CachedAt),
 			zap.Strings("phones", hit.Phones),
 			zap.Strings("emails", hit.Emails),
@@ -46,17 +47,26 @@ func (g *GelbeSeitenSource) Scrape(company model.Company, cfg Config) (*ContactI
 			Phones:  hit.Phones,
 			Emails:  hit.Emails,
 			Website: hit.Website,
-			Source:  hit.Source,
+			Source:  "cache_found",
 		}, nil
 	}
 
-	logging.Logger.Info("cache miss — searching gelbeseiten",
+	// ── 2. NOT_FOUND cache lookup ─────────────────────────────────────────────
+	if g.cache.IsNotFound(key) {
+		logging.Logger.Info("cache_not_found_company — skipping search",
+			zap.String("company", company.ReName),
+			zap.String("city", company.ReOrt),
+		)
+		return empty, nil
+	}
+
+	// ── 3. Scrape GelbeSeiten ─────────────────────────────────────────────────
+	logging.Logger.Info("scrape_started",
 		zap.String("company", company.ReName),
 		zap.String("city", company.ReOrt),
 		zap.String("key", key),
 	)
 
-	// ── 2. Scrape GelbeSeiten ────────────────────────────────────────────────
 	gsCfg := gelbeseiten.Config{
 		RequestTimeout: cfg.RequestTimeout,
 		RequestDelay:   cfg.RequestDelay,
@@ -66,7 +76,7 @@ func (g *GelbeSeitenSource) Scrape(company model.Company, cfg Config) (*ContactI
 
 	contact, err := gelbeseiten.Scrape(company, gsCfg)
 	if err != nil {
-		logging.Logger.Warn("gelbeseiten scrape error",
+		logging.Logger.Warn("scrape_failed",
 			zap.String("company", company.ReName),
 			zap.Error(err),
 		)
@@ -75,9 +85,16 @@ func (g *GelbeSeitenSource) Scrape(company model.Company, cfg Config) (*ContactI
 
 	// nil → no search result at all (company not listed on GelbeSeiten).
 	if contact == nil {
-		logging.Logger.Info("gelbeseiten not found",
+		logging.Logger.Info("scrape_completed — not found on GelbeSeiten",
 			zap.String("company", company.ReName),
 			zap.String("city", company.ReOrt),
+		)
+		// ── 4a. Save to NOT_FOUND cache ──────────────────────────────────────
+		g.cache.SetNotFound(key, g.Name())
+		logging.Logger.Info("company_saved_not_found",
+			zap.String("company", company.ReName),
+			zap.String("city", company.ReOrt),
+			zap.Int("totalNotFound", g.cache.LenNotFound()),
 		)
 		return empty, nil
 	}
@@ -89,10 +106,17 @@ func (g *GelbeSeitenSource) Scrape(company model.Company, cfg Config) (*ContactI
 		Source:  g.Name(),
 	}
 
-	// ── 3. Archive ONLY when at least one contact field was found ────────────
+	logging.Logger.Info("scrape_completed",
+		zap.String("company", company.ReName),
+		zap.Strings("phones", result.Phones),
+		zap.Strings("emails", result.Emails),
+		zap.String("website", result.Website),
+	)
+
+	// ── 4b. Save to FOUND cache (only when at least one contact field found) ──
 	//
 	// Empty profiles (profile page opened but no phone / email / website
-	// present) are intentionally skipped so the company will be tried again
+	// present) are intentionally NOT cached so the company will be retried
 	// on the next run rather than being permanently marked as "found but empty".
 	if hasContactData(result) {
 		g.cache.Set(key, cache.CachedContact{
@@ -101,13 +125,13 @@ func (g *GelbeSeitenSource) Scrape(company model.Company, cfg Config) (*ContactI
 			Website: result.Website,
 			Source:  result.Source,
 		})
-		logging.Logger.Info("archived to cache",
+		logging.Logger.Info("company_saved_found",
 			zap.String("company", company.ReName),
 			zap.String("key", key),
 			zap.Strings("phones", result.Phones),
 			zap.Strings("emails", result.Emails),
 			zap.String("website", result.Website),
-			zap.Int("totalCached", g.cache.Len()),
+			zap.Int("totalFound", g.cache.Len()),
 		)
 	} else {
 		logging.Logger.Info("profile found but no contact data — not archived",

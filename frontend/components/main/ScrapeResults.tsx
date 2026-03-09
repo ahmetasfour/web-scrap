@@ -2,7 +2,7 @@
 
 import * as XLSX from 'xlsx'
 import { ScrapeResult } from '@/data'
-import { useState, useEffect, useRef, useMemo, memo } from 'react'
+import { useEffect, useRef, useState, memo } from 'react'
 
 const StatusBadge = ({ status }: { status: ScrapeResult['status'] }) => {
   const map = {
@@ -30,11 +30,7 @@ interface ScrapeResultsProps {
 }
 
 function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
-  const [filterStatus, setFilterStatus] = useState<'all' | 'done' | 'not_found' | 'error'>('all')
-
   const startTimeRef = useRef<number | null>(null)
-  const [speed, setSpeed] = useState(0)
-  const [eta, setEta] = useState<number | null>(null)
   const prevProcessedRef = useRef(0)
 
   const stats = {
@@ -45,39 +41,51 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
     pending:   results.filter((r) => r.status === 'pending').length,
   }
   const processed = stats.done + stats.not_found + stats.error
-  const pct = stats.total > 0 ? Math.round((processed / stats.total) * 100) : 0
+  const pct = stats.total > 0 ? (processed / stats.total) * 100 : 0
+
+  // Smooth animated percentage — eases toward the real pct value at ~60fps
+  const [displayPct, setDisplayPct] = useState(0)
+  const displayRef = useRef(0)
+  const rafRef = useRef<number | null>(null)
 
   useEffect(() => {
-    if (isScraping && startTimeRef.current === null) {
-      startTimeRef.current = Date.now()
+    const target = pct
+
+    const animate = () => {
+      const current = displayRef.current
+      const diff = target - current
+      // Step: fast when far, slow when close (ease-out feel)
+      const step = diff * 0.04 + (diff > 0 ? 0.01 : 0)
+      const next = Math.abs(diff) < 0.005 ? target : current + step
+      displayRef.current = next
+      setDisplayPct(next)
+      if (Math.abs(next - target) > 0.005) {
+        rafRef.current = requestAnimationFrame(animate)
+      }
     }
+
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    rafRef.current = requestAnimationFrame(animate)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [pct])
+
+  useEffect(() => {
     if (!isScraping) {
       startTimeRef.current = null
-      setSpeed(0)
-      setEta(null)
       prevProcessedRef.current = 0
-      return
     }
-    if (startTimeRef.current === null) return
-
-    const elapsed = (Date.now() - startTimeRef.current) / 1000
-    const spd = elapsed > 0 ? processed / elapsed : 0
-    setSpeed(spd)
-
-    const remaining = stats.total - processed
-    setEta(spd > 0 ? remaining / spd : null)
-
     prevProcessedRef.current = processed
-  }, [processed, isScraping, stats.total])
+  }, [processed, isScraping])
 
-  const filtered = useMemo(
-    () => filterStatus === 'all' ? results : results.filter((r) => r.status === filterStatus),
-    [results, filterStatus]
-  )
+  const filtered = results.filter((r) => {
+    if (r.status !== 'done') return false
+    const hasEmail = (r.emails && r.emails.length > 0) || !!r.email
+    const hasPhone = (r.phones && r.phones.length > 0) || !!r.telefonnummer
+    return hasEmail && hasPhone
+  })
 
   const handleExportExcel = () => {
-    const done = results.filter((r) => r.status === 'done')
-    const rows = done.map((r) => ({
+    const rows = filtered.map((r) => ({
       'En Objekt':      r.enObjekt,
       'Re Name':        r.reName,
       'Re Name2':       r.reName2,
@@ -91,7 +99,6 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
       'Telefonnummer':  r.phones?.[0] ?? r.telefonnummer,
       'Tüm E-postalar': (r.emails ?? []).join(', '),
       'Tüm Telefonlar': (r.phones ?? []).join(', '),
-      'Kaynak':         r.source,
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
@@ -115,30 +122,20 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
   return (
     <div>
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            {([
-              { value: 'all',       label: 'Tümü',         count: stats.total     },
-              { value: 'done',      label: '✓ Bulundu',    count: stats.done      },
-              { value: 'not_found', label: '— Bulunamadı', count: stats.not_found },
-              { value: 'error',     label: '✕ Hata',       count: stats.error     },
-            ] as const).map(({ value, label, count }) => (
-              <button
-                key={value}
-                onClick={() => setFilterStatus(value)}
-                className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-colors ${
-                  filterStatus === value
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-200 hover:text-blue-600 dark:hover:text-blue-400'
-                }`}
-              >
-                {label} <span className="opacity-70">({count})</span>
-              </button>
-            ))}
-          </div>
+      <div className="relative flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+        {/* center: percentage */}
+        <div className="absolute left-0 right-0 flex justify-center pointer-events-none">
+          {stats.total > 0 && (
+            <span className={`text-4xl font-black tabular-nums tracking-tight ${
+              displayPct >= 99.995
+                ? 'text-emerald-500'
+                : 'text-blue-500 dark:text-blue-400'
+            }`}>
+              {Math.min(displayPct, 100).toFixed(1)}
+              <span className="text-2xl font-bold ml-0.5">%</span>
+            </span>
+          )}
         </div>
-
         {stats.done > 0 && (
           <button
             onClick={handleExportExcel}
@@ -159,8 +156,8 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
           <div
             className="h-full rounded-full transition-all duration-300 ease-out"
             style={{
-              width: `${pct}%`,
-              background: pct === 100
+              width: `${displayPct}%`,
+              background: displayPct >= 99.995
                 ? 'linear-gradient(90deg, #10b981, #059669)'
                 : 'linear-gradient(90deg, #3b82f6, #6366f1)',
             }}
@@ -232,8 +229,17 @@ function ScrapeResultsInner({ results, isScraping }: ScrapeResultsProps) {
                       <span className="text-gray-300 dark:text-gray-600">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                    {r.source || <span className="text-gray-300 dark:text-gray-600">—</span>}
+                  <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                    {r.source === 'cache_found' ? (
+                      <span className="inline-flex items-center gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12l4-4m-4 4l4 4" />
+                        </svg>
+                        Önbellekten
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500">{r.source || <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                     <div className="inline-flex items-center gap-2">
